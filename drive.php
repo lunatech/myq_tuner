@@ -18,8 +18,12 @@ $status = result2hash($mysql_status);
 
 include "CMyqFindRecommendations.php";
 $x = new Myq_BaseRecommendations($vars,$status,true);
-var_dump($x->get_analysis());
-print "Getting tuneups\n\n";
-var_dump($x->get_recommendations());
+$x->get_analysis();
+print "Getting general tuneups\n\n";
+var_dump($x->get_general_tuneups());
 print "\n";
+
+print "Getting variable tuneups\n\n";
+var_dump($x->get_variable_tuneups());
+
 ?>

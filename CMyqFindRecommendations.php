@@ -24,7 +24,8 @@ class Myq_BaseRecommendations
   // status counters, i.e. what we get from "show status"
   private $myq_status;
   
-  public $tuneups = array();
+  private $general_tuneups  = array();
+  private $variable_tuneups = array();
   
   // pretty print debug messages
   function dbg_print($msg)
@@ -205,7 +206,7 @@ class Myq_BaseRecommendations
     } elseif ($num >= pow(1000,2)) { # Millions
       return (int)(($num/pow(1000,2)))."M";
     } elseif ($num >= 1000) { # Thousands
-      return int(($num/1000))."K";
+      return (int)(($num/1000))."K";
     } else {
       return $num;
     }
@@ -253,15 +254,15 @@ class Myq_BaseRecommendations
     }
     if ($myvar['long_query_time'] > 10) { array_push($tuneups,"long_query_time (<= 10)"); }
     if (isset($myvar['log_slow_queries'])) {
-      if ($myvar['log_slow_queries'] == "OFF") { array_push($this->tuneups,"Enable the slow query log to troubleshoot bad queries"); }
+      if ($myvar['log_slow_queries'] == "OFF") { array_push($this->general_tuneups,"Enable the slow query log to troubleshoot bad queries"); }
     }
     
     // Connections
     if ($mycalc['pct_connections_used'] > 85) {
-      array_push($this->tuneups,"Highest connection usage: ". $mycalc['pct_connections_used']."%  ".($mystat['Max_used_connections']."/".$myvar['max_connections']));
-      array_push($this->tuneups,"max_connections (> ".$myvar['max_connections'].")");
-      array_push($this->tuneups,"wait_timeout (< ".$myvar['wait_timeout'].")","interactive_timeout (< ".$myvar['interactive_timeout'].")");
-      array_push($this->tuneups,"Reduce or eliminate persistent connections to reduce connection usage");
+      array_push($this->variable_tuneups,"Highest connection usage: ". $mycalc['pct_connections_used']."%  ".($mystat['Max_used_connections']."/".$myvar['max_connections']));
+      array_push($this->variable_tuneups,"max_connections (> ".$myvar['max_connections'].")");
+      array_push($this->variable_tuneups,"wait_timeout (< ".$myvar['wait_timeout'].")","interactive_timeout (< ".$myvar['interactive_timeout'].")");
+      array_push($this->general_tuneups,"Reduce or eliminate persistent connections to reduce connection usage");
     } else {
       $analysis['good']['available connections'] = "Highest usage of available connections: ".$mycalc['pct_connections_used']."% ".($mystat['Max_used_connections']."/".$myvar['max_connections']);
     }
@@ -271,22 +272,22 @@ class Myq_BaseRecommendations
     // Query cache
     if ($myvar['query_cache_size'] < 1) {
       $analysis['bad']['query cache'] =  "Query cache is disabled";
-      array_push($this->tuneups,"query_cache_size (>= 8M)");
+      array_push($this->variable_tuneups,"query_cache_size (>= 8M)");
     } elseif ($mystat['Com_select'] == 0) {
       $analysis['bad']['query cache efficiency']  = "Query cache cannot be analyzed - no SELECT statements executed";
     } else {
       if ($mycalc['query_cache_efficiency'] < 20) {
-	array_push($this->tuneups, "Query cache efficiency: ".$mycalc['query_cache_efficiency']."% (".$this->hr_num($mystat['Qcache_hits'])." cached / "
+	array_push($this->variable_tuneups, "Query cache efficiency: ".$mycalc['query_cache_efficiency']."% (".$this->hr_num($mystat['Qcache_hits'])." cached / "
 		   .$this->hr_num($mystat['Qcache_hits']+$mystat['Com_select'])." selects)");
       }
       
       if ($mycalc['query_cache_prunes_per_day'] > 98) {
 	$analysis['bad']['Query cache prunes per day'] = $mycalc['query_cache_prunes_per_day'];
 	if ($myvar['query_cache_size'] > 128*1024*1024) {
-	  array_push($this->tuneups,"Increasing the query_cache size over 128M may reduce performance");
-	  array_push($this->tuneups,"query_cache_size (> ".$this->hr_bytes_rnd($myvar['query_cache_size']).") [see warning above]");
+	  array_push($this->general_tuneups,"Increasing the query_cache size over 128M may reduce performance");
+	  array_push($this->variable_tuneups,"query_cache_size (> ".$this->hr_bytes_rnd($myvar['query_cache_size']).") [see warning above]");
 	} else {
-	  array_push($this->tuneups,"query_cache_size (> ".$this->hr_bytes_rnd($myvar['query_cache_size']).")");
+	  array_push($this->variable_tuneups,"query_cache_size (> ".$this->hr_bytes_rnd($myvar['query_cache_size']).")");
 	}
       } else {
 	$analysis['good']['Query cache prunes per day']= $mycalc['query_cache_prunes_per_day'];
@@ -300,21 +301,93 @@ class Myq_BaseRecommendations
       // No sorts have run yet
     } elseif ($mycalc['pct_temp_sort_table'] > 10) {
       $analysis['bad']['Sorts requiring temporary tables'] = $mycalc['pct_temp_sort_table']."% (".$this->hr_num($mystat['Sort_merge_passes'])." temp sorts / ".$this->hr_num($mycalc['total_sorts'])." sorts)";
-      array_push($this->tuneups,"sort_buffer_size (> ".$this->hr_bytes_rnd($myvar['sort_buffer_size']).")");
-      array_push($this->tuneups,"read_rnd_buffer_size (> ".$this->hr_bytes_rnd($myvar['read_rnd_buffer_size']).")");
+      array_push($this->variable_tuneups,"sort_buffer_size (> ".$this->hr_bytes_rnd($myvar['sort_buffer_size']).")");
+      array_push($this->variable_tuneups,"read_rnd_buffer_size (> ".$this->hr_bytes_rnd($myvar['read_rnd_buffer_size']).")");
     } else {
       $analysis['good']['Sorts requiring temporary tables'] = $mycalc['pct_temp_sort_table']."% (".$this->hr_num($mystat['Sort_merge_passes'])." temp sorts / ".$this->hr_num($mycalc['total_sorts'])." sorts)";
     }
 	
-    
-    
+    // Joins
+    if ($mycalc['joins_without_indexes_per_day'] > 250) {
+      $analysis['bad']['Joins performed without indexes'] = $mycalc['joins_without_indexes'];
+      array_push($this->variable_tuneups,"join_buffer_size (> ".$this->hr_bytes($myvar['join_buffer_size']).", or always use indexes with joins)");
+      array_push($this->general_tuneups,"Adjust your join queries to always utilize indexes");
+    } else {
+      // For the sake of space, we will be quiet here
+      // No joins have run without indexes
+    }
 
+    // Temporary tables
+    if ($mystat['Created_tmp_tables'] > 0) {
+      if ($mycalc['pct_temp_disk'] > 25 && $mycalc['max_tmp_table_size'] < 256*1024*1024) {
+	$analysis['bad']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)\n";
+	array_push($this->variable_tuneups,"tmp_table_size (> ".$this->hr_bytes_rnd($myvar['tmp_table_size']).")");
+	array_push($this->variable_tuneups,"max_heap_table_size (> ".$this->hr_bytes_rnd($myvar['max_heap_table_size']).")");
+	array_push($this->general_tuneups,"When making adjustments, make tmp_table_size/max_heap_table_size equal");
+	array_push($this->general_tuneups,"Reduce your SELECT DISTINCT queries without LIMIT clauses");
+      } elseif ($mycalc['pct_temp_disk'] > 25 && $mycalc['max_tmp_table_size'] >= 256) {
+	$analysis['bad']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)\n";
+	array_push($this->general_tuneups,"Temporary table size is already large - reduce result set size");
+	array_push($this->general_tuneups,"Reduce your SELECT DISTINCT queries without LIMIT clauses");
+      } else {
+	$analysis['good']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)\n";
+      }
+    } else {
+      // For the sake of space, we will be quiet here
+      // No temporary tables have been created
+    }
+
+    // Thread cache
+    if ($myvar['thread_cache_size'] == 0) {
+      $analysis['bad']['Thread cache'] ="Thread cache is disabled";
+      array_push($this->general_tuneups,"Set thread_cache_size to 4 as a starting value");
+      array_push($this->variable_tuneups,"thread_cache_size (start at 4)");
+    } else {
+      if ($mycalc['thread_cache_hit_rate'] <= 50) {
+	$analysis['bad']['Thread cache hit rate'] =  $mycalc['thread_cache_hit_rate']."% (".$this->hr_num($mystat['Threads_created'])." created / ".$this->hr_num($mystat['Connections'])." connections)";
+	array_push($this->variable_tuneups,"thread_cache_size (> ".$myvar['thread_cache_size'].")");
+      } else {
+	$analysis['good']['Thread cache hit rate'] =  $mycalc['thread_cache_hit_rate']."% (".$this->hr_num($mystat['Threads_created'])." created / ".$this->hr_num($mystat['Connections'])." connections)\n";
+      }
+    }
+
+    // Table cache
+    if ($mystat['Open_tables'] > 0) {
+      if ($mycalc['table_cache_hit_rate'] < 20) {
+	$analysis['bad']['Table cache hit rate'] = $mycalc['table_cache_hit_rate']."%"." (".$this->hr_num($mystat['Open_tables'])." open / ".$this->hr_num($mystat['Opened_tables'])." opened)\n";
+	if (array_key_exists('table_open_cache',$myvar))  // for mysqlversion > 5.1
+	  array_push($this->variable_tuneups,"table_cache (> ".$myvar['table_open_cache'].")");
+      } else {
+	array_push($this->variable_tuneups,"table_cache (> ".$myvar['table_cache'].")");
+      }
+      array_push($this->general_tuneups,"Increase table_cache gradually to avoid file descriptor limits");
+    } else {
+      $analysis['good']['Table cache hit rate'] = $mycalc['table_cache_hit_rate']."%"." (".$this->hr_num($mystat['Open_tables'])." open / ".$this->hr_num($mystat['Opened_tables'])." opened)\n";
+    }
+ 
+    // Open files
+    if (array_key_exists('pct_files_open',$mycalc)) {
+      if ($mycalc['pct_files_open'] > 85) {
+	$analysis['bad']['Open file limit used'] = $mycalc['pct_files_open']."%"." (".$this->hr_num($mystat['Open_files'])."/".$this->hr_num($myvar['open_files_limit']).")";
+	array_push($this->variable_tuneups,"open_files_limit (> ".$myvar['open_files_limit'].")");
+      } else {
+	$analysis['good']['Open file limit used'] = $mycalc['pct_files_open']."%"." (".$this->hr_num($mystat['Open_files'])."/".$this->hr_num($myvar['open_files_limit']).")";
+      }
+    }
+
+    
     return $analysis;
   }
 
-  public function get_recommendations() 
+  public function get_variable_tuneups () 
   {
-    return $this->tuneups;
+    return $this->variable_tuneups;
   }
+
+  public function get_general_tuneups () 
+  {
+    return $this->general_tuneups;
+  }
+
 
 } //end class
