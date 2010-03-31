@@ -1,4 +1,14 @@
 <?php
+
+// Tune this
+//
+//
+$user = 'root';
+$pass = '';
+$host = 'localhost';
+
+// No changes required below
+
 function result2hash($result)
 {
   $hash;
@@ -22,12 +32,8 @@ function print_tbl($header,$arr)
   }
 }
 
-$user = 'root';
-$pass = '';
-$host = 'localhost';
 
-$link = mysql_connect('localhost', 'root', '')
-  or die('Could not connect: ' . mysql_error());
+$link = mysql_connect($host,$user,$pass)  or die('Could not connect: ' . mysql_error());
 $mysql_vars   = mysql_query("show  /*!50000 GLOBAL */ variables") or die('Query failed: ' . mysql_error());
 $mysql_status = mysql_query("show  /*!50000 GLOBAL */ status") or die('Query failed: ' . mysql_error());
 $vars = result2hash($mysql_vars);
