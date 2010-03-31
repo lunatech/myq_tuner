@@ -1,4 +1,11 @@
 <?
+/**
+ * (c) Raj Shekhar <rajlist@rajshekhar.net>
+ * derived from  MySQLTuner (mysqltuner.com)
+ *
+ * License: GPL v2
+ */
+
 error_reporting(E_ALL);
 
 class Myq_BaseRecommendations
@@ -26,7 +33,10 @@ class Myq_BaseRecommendations
   
   private $general_tuneups  = array();
   private $variable_tuneups = array();
-  
+  private $good_info = array();
+  private $bad_info  = array();
+  private $info = array();
+
   // pretty print debug messages
   function dbg_print($msg)
   {
@@ -39,9 +49,21 @@ class Myq_BaseRecommendations
     $this->myq_vars = $myq_vars;
     $this->myq_status = $myq_status;
     $this->debug = $debug;
-    $this->dbg_print("starting");
-    $this->mycalc = $this->calculate_derived_status($this->myq_vars,$this->myq_status);
-    //print_r($this->mycalc);
+    $this->dbg_print("starting");    
+    // print_r($this->mycalc);
+  }
+
+  public function analyze()
+  {
+    $mycalc = $this->calculate_derived_status($this->myq_vars,$this->myq_status);
+    if (isset($mycalc)) {
+      $this->dbg_print("Sucessfully calculated derived values");
+      $this->mycalc = $mycalc;
+      $analysis = $this->get_analysis();      
+      $this->good_info = $analysis['good'];
+      $this->bad_info  = $analysis['bad'];
+      $this->info  = $analysis['info'];
+    }
   }
 
   /**
@@ -179,7 +201,7 @@ class Myq_BaseRecommendations
       $mycalc['innodb_log_size_pct'] = ($myvar['innodb_log_file_size'] * 100 / $myvar['innodb_buffer_pool_size']);
     }
 
-    print_r($mycalc);
+    //print_r($mycalc);
     return $mycalc;
   }  
 
@@ -188,11 +210,11 @@ class Myq_BaseRecommendations
   private function hr_bytes($num) 
   {
     if ($num >= (1024*1024*1024)) { #GB
-      return sprintf("%.1f",($num/(1024*1024*1024)))."G";
+      return sprintf("%.1f",($num/(1024*1024*1024)))." Gb";
     } elseif ($num >= (1024*1024)) { #MB
-      return sprintf("%.1f",($num/(1024*1024)))."M";
+      return sprintf("%.1f",($num/(1024*1024)))." Mb";
     } elseif ($num >= 1024) { #KB
-      return sprintf("%.1f",($num/1024))."K";
+      return sprintf("%.1f",($num/1024))." Kb";
     } else {
       return $num."B";
     }
@@ -202,11 +224,11 @@ class Myq_BaseRecommendations
   {
 	
     if ($num >= pow(1000,3)) { # Billions
-      return int(($num/pow(1000,3)))."B";
+      return int(($num/pow(1000,3)))." Billion";
     } elseif ($num >= pow(1000,2)) { # Millions
-      return (int)(($num/pow(1000,2)))."M";
+      return (int)(($num/pow(1000,2)))." Million";
     } elseif ($num >= 1000) { # Thousands
-      return (int)(($num/1000))."K";
+      return (int)(($num/1000))." Thousand";
     } else {
       return $num;
     }
@@ -216,13 +238,13 @@ class Myq_BaseRecommendations
   private function  hr_bytes_rnd($num)
   {
     if ($num >= pow(1024,3)) { #GB
-      return (int)(($num/pow(1024,3)))."G";
+      return (int)(($num/pow(1024,3)))." Gib";
     } elseif ($num >= pow(1024,2)) { #MB
-      return (int)(($num/pow(1024,2)))."M";
+      return (int)(($num/pow(1024,2)))." Mib";
     } elseif ($num >= 1024) { #KB
-      return (int)(($num/1024))."K";
+      return (int)(($num/1024))." Kb";
     } else {
-      return $num."B";
+      return $num." B";
     }
   }
 
@@ -240,9 +262,9 @@ class Myq_BaseRecommendations
      
     $this->dbg_print("questions ". $mystat['Questions'] ." uptime " .$mystat['Uptime']);
     $analysis['info']['qps'] = sprintf("%.3f",$mystat['Questions']/$mystat['Uptime']); 
-    $analysis['info']['TX']  = $mystat['Bytes_sent'];
-    $analysis['info']['RX']  = $mystat['Bytes_received'];
-    $analysis['info']['ReadsAndWrites'] = $mycalc['pct_reads']."% / ".$mycalc['pct_writes']."%";
+    $analysis['info']['TX']  = $this->hr_bytes($mystat['Bytes_sent']);
+    $analysis['info']['RX']  = $this->hr_bytes($mystat['Bytes_received']);
+    $analysis['info']['Reads to Writes ratio'] = $mycalc['pct_reads']."% / ".$mycalc['pct_writes']."%";
     $analysis['info']['Total buffers']   =  $this->hr_bytes($mycalc['server_buffers'])." global + "
       . $this->hr_bytes($mycalc['per_thread_buffers'])
       . " per thread (".$myvar['max_connections']." max threads)";
@@ -320,17 +342,17 @@ class Myq_BaseRecommendations
     // Temporary tables
     if ($mystat['Created_tmp_tables'] > 0) {
       if ($mycalc['pct_temp_disk'] > 25 && $mycalc['max_tmp_table_size'] < 256*1024*1024) {
-	$analysis['bad']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)\n";
+	$analysis['bad']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)";
 	array_push($this->variable_tuneups,"tmp_table_size (> ".$this->hr_bytes_rnd($myvar['tmp_table_size']).")");
 	array_push($this->variable_tuneups,"max_heap_table_size (> ".$this->hr_bytes_rnd($myvar['max_heap_table_size']).")");
 	array_push($this->general_tuneups,"When making adjustments, make tmp_table_size/max_heap_table_size equal");
 	array_push($this->general_tuneups,"Reduce your SELECT DISTINCT queries without LIMIT clauses");
       } elseif ($mycalc['pct_temp_disk'] > 25 && $mycalc['max_tmp_table_size'] >= 256) {
-	$analysis['bad']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)\n";
+	$analysis['bad']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)";
 	array_push($this->general_tuneups,"Temporary table size is already large - reduce result set size");
 	array_push($this->general_tuneups,"Reduce your SELECT DISTINCT queries without LIMIT clauses");
       } else {
-	$analysis['good']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)\n";
+	$analysis['good']['Temporary tables created on disk'] = $mycalc['pct_temp_disk']."% (".$this->hr_num($mystat['Created_tmp_disk_tables'])." on disk / ".$this->hr_num($mystat['Created_tmp_disk_tables'] + $mystat['Created_tmp_tables'])." total)";
       }
     } else {
       // For the sake of space, we will be quiet here
@@ -347,14 +369,14 @@ class Myq_BaseRecommendations
 	$analysis['bad']['Thread cache hit rate'] =  $mycalc['thread_cache_hit_rate']."% (".$this->hr_num($mystat['Threads_created'])." created / ".$this->hr_num($mystat['Connections'])." connections)";
 	array_push($this->variable_tuneups,"thread_cache_size (> ".$myvar['thread_cache_size'].")");
       } else {
-	$analysis['good']['Thread cache hit rate'] =  $mycalc['thread_cache_hit_rate']."% (".$this->hr_num($mystat['Threads_created'])." created / ".$this->hr_num($mystat['Connections'])." connections)\n";
+	$analysis['good']['Thread cache hit rate'] =  $mycalc['thread_cache_hit_rate']."% (".$this->hr_num($mystat['Threads_created'])." created / ".$this->hr_num($mystat['Connections'])." connections)";
       }
     }
 
     // Table cache
     if ($mystat['Open_tables'] > 0) {
       if ($mycalc['table_cache_hit_rate'] < 20) {
-	$analysis['bad']['Table cache hit rate'] = $mycalc['table_cache_hit_rate']."%"." (".$this->hr_num($mystat['Open_tables'])." open / ".$this->hr_num($mystat['Opened_tables'])." opened)\n";
+	$analysis['bad']['Table cache hit rate'] = $mycalc['table_cache_hit_rate']."%"." (".$this->hr_num($mystat['Open_tables'])." open / ".$this->hr_num($mystat['Opened_tables'])." opened)";
 	if (array_key_exists('table_open_cache',$myvar))  // for mysqlversion > 5.1
 	  array_push($this->variable_tuneups,"table_cache (> ".$myvar['table_open_cache'].")");
       } else {
@@ -362,7 +384,7 @@ class Myq_BaseRecommendations
       }
       array_push($this->general_tuneups,"Increase table_cache gradually to avoid file descriptor limits");
     } else {
-      $analysis['good']['Table cache hit rate'] = $mycalc['table_cache_hit_rate']."%"." (".$this->hr_num($mystat['Open_tables'])." open / ".$this->hr_num($mystat['Opened_tables'])." opened)\n";
+      $analysis['good']['Table cache hit rate'] = $mycalc['table_cache_hit_rate']."%"." (".$this->hr_num($mystat['Open_tables'])." open / ".$this->hr_num($mystat['Opened_tables'])." opened)";
     }
  
     // Open files
@@ -374,6 +396,19 @@ class Myq_BaseRecommendations
 	$analysis['good']['Open file limit used'] = $mycalc['pct_files_open']."%"." (".$this->hr_num($mystat['Open_files'])."/".$this->hr_num($myvar['open_files_limit']).")";
       }
     }
+    
+    // performance options
+
+    if ($myvar['concurrent_insert'] == "OFF") {
+      array_push($this->general_tuneups,"Enable concurrent_insert by setting it to 'ON'");
+    } elseif ($myvar['concurrent_insert'] == 0) {
+      array_push($this->general_tuneups,"Enable concurrent_insert by setting it to 1");
+    }
+    if ($mycalc['pct_aborted_connections'] > 5) {
+      $analysis['bad']['Connections aborted'] = $mycalc['pct_aborted_connections']."%";
+      array_push($this->general_tuneups,"Your applications are not closing MySQL connections properly");
+    }
+    
 
     
     return $analysis;
@@ -384,9 +419,26 @@ class Myq_BaseRecommendations
     return $this->variable_tuneups;
   }
 
+
+
   public function get_general_tuneups () 
   {
     return $this->general_tuneups;
+  }
+
+  public function get_good_info () 
+  {
+    return $this->good_info;
+  }
+
+  public function get_bad_info () 
+  {
+    return $this->bad_info;
+  }
+
+  public function get_info () 
+  {
+    return $this->info;
   }
 
 

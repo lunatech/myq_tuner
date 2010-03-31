@@ -1,1 +1,0 @@
- perl -lape "s/{'/['/g;s/'}/']/g" scratch.txt 

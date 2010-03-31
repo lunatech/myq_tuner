@@ -8,6 +8,19 @@ function result2hash($result)
   return $hash;
 }
 
+function printconsoletable($header,$arr)
+{
+  print "\n==========\t$header\t==========\n";
+  foreach ($arr as $key => $value) {
+    if (is_string($key)) {      
+      printf ("%-10s: %s\n",$key,$value);
+    }
+    else 
+      {
+	printf ("%10s\n",$value);
+      }
+  }
+}
 
 $link = mysql_connect('localhost', 'root', '')
   or die('Could not connect: ' . mysql_error());
@@ -17,13 +30,15 @@ $vars = result2hash($mysql_vars);
 $status = result2hash($mysql_status);
 
 include "CMyqFindRecommendations.php";
-$x = new Myq_BaseRecommendations($vars,$status,true);
-$x->get_analysis();
-print "Getting general tuneups\n\n";
-var_dump($x->get_general_tuneups());
-print "\n";
+$x = new Myq_BaseRecommendations($vars,$status,false);
+$x->analyze();
+printconsoletable("Info",$x->get_info());
+printconsoletable("No problems detected in following",$x->get_good_info());
+printconsoletable("Problems",$x->get_bad_info());
+printconsoletable("General tuneups",$x->get_general_tuneups());
+printconsoletable("Variable tuneups",$x->get_variable_tuneups());
 
-print "Getting variable tuneups\n\n";
-var_dump($x->get_variable_tuneups());
+/* var_dump($x->get_bad_info()); */
+
 
 ?>
