@@ -1,3 +1,38 @@
+-*-outline-*-
+* Introduction
+
 Port of mysqltuner (http://mysqltuner.com) to PHP.  
 
+* How to run
+
+- checkout from git, git clone git@github.com:lunatech/myq_tuner.git
+- cd myq_tuner
+- open drive.php to update the user/pass/host details
+- run the script with php, i.e. php drive.php
+
+
+* ToDo
+
 Not all of mysqltuner's functionality has been ported yet.  Want to help? Email rajlist@rajshekhar.net
+
+** Engine stats are not being calculated
+
+No innodb or myisam stats are being checked and no tuning options are being calculated on them.
+
+** Implicitly assuming that we will be run on MySQL 5
+
+With some minor tweaks, we can run on at least mysql 4.1.  First step, script should fail if not running on mysql 5.
+
+** The class should handle the job of getting mysql status and vars
+
+$mysql_vars   = mysql_query("show  /*!50000 GLOBAL */ variables") or die('Query failed: ' . mysql_error());
+$mysql_status = mysql_query("show  /*!50000 GLOBAL */ status") or die('Query failed: ' . mysql_error());
+
+$vars = result2hash($mysql_vars);
+$status = result2hash($mysql_status);
+
+These should move into the class
+
+** How do we run system commands
+
+Might need it to get mem/cpuinfo
