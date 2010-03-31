@@ -109,7 +109,9 @@ class Myq_BaseRecommendations
 	
     // Key buffers
     $mycalc['pct_key_buffer_used'] = sprintf("%.1f",(1 - (($mystat['Key_blocks_unused'] * $myvar['key_cache_block_size']) / $myvar['key_buffer_size'])) * 100);
-    $mycalc['pct_keys_from_mem'] = sprintf("%.1f",(100 - (($mystat['Key_reads'] / $mystat['Key_read_requests']) * 100)));
+    if ($mystat['Key_read_requests'] >0 ) {
+      $mycalc['pct_keys_from_mem'] = sprintf("%.1f",(100 - (($mystat['Key_reads'] / $mystat['Key_read_requests']) * 100)));
+    }
 
     
     // TODO: fix myisam index calculations

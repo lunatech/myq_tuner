@@ -8,7 +8,7 @@ function result2hash($result)
   return $hash;
 }
 
-function printconsoletable($header,$arr)
+function print_tbl($header,$arr)
 {
   print "\n==========\t$header\t==========\n";
   foreach ($arr as $key => $value) {
@@ -22,6 +22,10 @@ function printconsoletable($header,$arr)
   }
 }
 
+$user = 'root';
+$pass = '';
+$host = 'localhost';
+
 $link = mysql_connect('localhost', 'root', '')
   or die('Could not connect: ' . mysql_error());
 $mysql_vars   = mysql_query("show  /*!50000 GLOBAL */ variables") or die('Query failed: ' . mysql_error());
@@ -32,13 +36,10 @@ $status = result2hash($mysql_status);
 include "CMyqFindRecommendations.php";
 $x = new Myq_BaseRecommendations($vars,$status,false);
 $x->analyze();
-printconsoletable("Info",$x->get_info());
-printconsoletable("No problems detected in following",$x->get_good_info());
-printconsoletable("Problems",$x->get_bad_info());
-printconsoletable("General tuneups",$x->get_general_tuneups());
-printconsoletable("Variable tuneups",$x->get_variable_tuneups());
-
-/* var_dump($x->get_bad_info()); */
-
+print_tbl("Info",$x->get_info());
+print_tbl("No problems detected in following",$x->get_good_info());
+print_tbl("Problems",$x->get_bad_info());
+print_tbl("General tuneups",$x->get_general_tuneups());
+print_tbl("Variable tuneups",$x->get_variable_tuneups());
 
 ?>
